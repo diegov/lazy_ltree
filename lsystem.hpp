@@ -14,9 +14,9 @@ namespace trlsai {
         template <typename KEY, typename VALUE>
         struct Node {
             Node() { }
-            Node(KEY first, VALUE second): first(first), second(second) { }
-            KEY first;
-            VALUE second;
+            Node(KEY key, VALUE value): key(key), value(value) { }
+            KEY key;
+            VALUE value;
         };
     
         template <typename KEY, typename VALUE>
@@ -40,22 +40,62 @@ namespace trlsai {
         };
 
         template <typename KEY, typename VALUE>
-        class System {
+        class System: public IteratorRegistry<Node<KEY, VALUE>> {
         public:
-            typedef Node<KEY, VALUE> TreeNode;
+            using TreeNode = Node<KEY, VALUE>;
+            using RegistrationNode = Node<TreeNode, shared_ptr<Iterator<TreeNode>>>;
     
-            System(shared_ptr<map<KEY, vector<KEY>>> rules, shared_ptr<Materialiser<KEY, VALUE>> materialiser) {
-                this->rules = rules;
-                this->materialiser = materialiser;
+            System(shared_ptr<map<KEY, vector<KEY>>> rules, shared_ptr<Materialiser<KEY, VALUE>> materialiser):
+                rules(rules), materialiser(materialiser) {
+            }
+
+            void update_rule(KEY &key, vector<KEY> &value) {
+                (*this->rules)[key] = value;
+                
+                auto registration = this->registrations.find(key);
+                if (registration == this->registrations.end()) {
+                    return;
+                }
+                for (auto it = registration->second.begin(); it != registration->second.end(); ++it) {
+                    RegistrationNode &element = *it;
+                    vector<TreeNode> expanded;
+                    this->expand(element.key, expanded);
+                    element.value->update_series(expanded);
+                }
+            }
+
+            void register_it(TreeNode &key, shared_ptr<Iterator<TreeNode>> it) override {
+                auto iter = this->registrations.find(key.key);
+                if (iter == this->registrations.end()) {
+                    this->registrations[key.key] = vector<RegistrationNode>({ RegistrationNode(key, it) });
+                } else {
+                    iter->second.push_back(RegistrationNode(key, it));
+                }
+            }
+
+            void unregister_it(TreeNode &key, shared_ptr<Iterator<TreeNode>> it) override {
+                auto iter = this->registrations.find(key.key);
+                if (iter == this->registrations.end()) {
+                    return;
+                }
+
+                vector<RegistrationNode> &elements = iter->second;
+                size_t size = elements.size();
+                for (int j = size - 1; j >= 0; --j) {
+                    if (elements[j].value == it) {
+                        elements.erase(elements.begin() + j);
+                        break;
+                    }
+                }
             }
 
             void expand(TreeNode &original, vector<TreeNode> &result) {
-                auto iter = this->rules->find(original.first);
+                auto iter = this->rules->find(original.key);
                 if (iter == this->rules->end()) {
-                    result.push_back(this->materialiser->produce(original.first, original.second));
+                    result.push_back(this->materialiser->produce(original.key, original.value));
                 } else {
                     for (auto keyit = iter->second.begin(); keyit != iter->second.end(); ++keyit) {
-                        TreeNode element = this->materialiser->produce(*keyit, original.second);
+                        TreeNode element = this->materialiser->produce(*keyit, original.value);
                         result.push_back(element);
                     }
                 }
@@ -65,7 +105,11 @@ namespace trlsai {
                 auto ctx = make_shared<Context<TreeNode>>(original);
                 ctx->iterations = iterations;
 
-                return this->ltree(ctx);
+                auto retval = this->ltree(ctx);
+                this->register_it(original, retval);
+                // TODO: this one doesn't get unregistered, it's probably better to let
+                // iterators register and unregister themselves when they reach the end.
+                return retval;
             }
 
             vector<TreeNode> expand(TreeNode &original, int iterations) {
@@ -93,10 +137,13 @@ namespace trlsai {
         private:
             shared_ptr<map<KEY, vector<KEY>>> rules;
             shared_ptr<Materialiser<KEY, VALUE>> materialiser;
+            map<KEY, vector<RegistrationNode>> registrations;
 
             shared_ptr<Iterator<TreeNode>> ltree(shared_ptr<Context<TreeNode>> ctx) {
                 if (ctx->iterations <= 0) {
-                    return make_shared<VectorIterator<TreeNode>>(vector<TreeNode>({ ctx->element }));
+                    TreeNode element = ctx->element;
+                    vector<TreeNode> series({ element });
+                    return make_shared<VectorIterator<TreeNode>>(series);
                 }
 
                 vector<TreeNode> expanded;
@@ -106,8 +153,9 @@ namespace trlsai {
                     return make_shared<VectorIterator<TreeNode>>(expanded);
                 }
 
-                return make_shared<NestedLazyIterator<TreeNode>>([this, ctx](TreeNode &node) { return this->ltree(ctx->child(node)); },
-                                                                 [expanded]() { return expanded; });
+                return make_shared<NestedLazyIterator<TreeNode>>(this,
+                                                                 [this, ctx](TreeNode &node) { return this->ltree(ctx->child(node)); },
+                                                                 expanded);
             }
         };
     }
