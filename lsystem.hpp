@@ -11,18 +11,50 @@ using namespace std;
 
 namespace trlsai {
     namespace lsystem {
+        template <typename KEY, typename RULEDATA>
+        struct RuleNode {
+            RuleNode() { }
+            RuleNode(KEY key, RULEDATA ruledata): key(key), ruledata(ruledata) { }
+            KEY key;
+            RULEDATA ruledata;
+        };
+
+        struct empty {
+        };
+
+        template <typename KEY>
+        struct RuleNode<KEY, empty> {
+            RuleNode() { }
+            RuleNode(KEY key): key(key), ruledata(empty()) { }
+            KEY key;
+            empty ruledata;
+        };
+
         template <typename KEY, typename VALUE>
-        struct Node {
-            Node() { }
-            Node(KEY key, VALUE value): key(key), value(value) { }
+        struct RawNode {
+            RawNode(KEY key, VALUE value): key(key), value(value) { }
             KEY key;
             VALUE value;
         };
-    
+
+        template <typename KEY, typename RULEDATA, typename VALUE>
+        struct Triplet: public RuleNode<KEY, RULEDATA> {
+            Triplet() { }
+            Triplet(KEY key, RULEDATA ruledata, VALUE value): RuleNode<KEY, RULEDATA>(key, ruledata), value(value) { }
+            VALUE value;            
+        };
+
         template <typename KEY, typename VALUE>
+        struct Triplet<KEY, empty, VALUE>: public RuleNode<KEY, empty> {
+            Triplet() { }
+            Triplet(KEY key, VALUE value): RuleNode<KEY, empty>(key), value(value) { }
+            VALUE value;
+        };
+
+        template <typename KEY, typename RULEDATA, typename VALUE>
         class Materialiser {
         public:
-            virtual Node<KEY, VALUE> produce(KEY key, VALUE parent) = 0;
+            virtual Triplet<KEY, RULEDATA, VALUE> produce(const KEY &key, const RULEDATA &rule_data, const Triplet<KEY, RULEDATA, VALUE> &parent, unsigned int total_siblings) = 0;
         };
 
         template <typename T>
@@ -39,19 +71,20 @@ namespace trlsai {
             }
         };
 
-        template <typename KEY, typename VALUE>
-        class System: public IteratorRegistry<Node<KEY, VALUE>> {
+        template <typename KEY, typename RULEDATA, typename VALUE>
+        class System: public IteratorRegistry<Triplet<KEY, RULEDATA, VALUE>> {
         public:
-            using TreeNode = Node<KEY, VALUE>;
-            using RegistrationNode = Node<TreeNode, shared_ptr<Iterator<TreeNode>>>;
+            using TreeNode = Triplet<KEY, RULEDATA, VALUE>;
+            using Rules = map<KEY, vector<RuleNode<KEY, RULEDATA>>>;
+            using RegistrationNode = RawNode<TreeNode, shared_ptr<Iterator<TreeNode>>>;
     
-            System(shared_ptr<map<KEY, vector<KEY>>> rules, shared_ptr<Materialiser<KEY, VALUE>> materialiser):
+            System(shared_ptr<Rules> rules, shared_ptr<Materialiser<KEY, RULEDATA, VALUE>> materialiser):
                 rules(rules), materialiser(materialiser) {
             }
 
-            void update_rule(KEY &key, vector<KEY> &value) {
+            void update_rule(const KEY &key, vector<RuleNode<KEY, RULEDATA>> &value) {
                 (*this->rules)[key] = value;
-                
+
                 auto registration = this->registrations.find(key);
                 if (registration == this->registrations.end()) {
                     return;
@@ -92,10 +125,11 @@ namespace trlsai {
             void expand(TreeNode &original, vector<TreeNode> &result) {
                 auto iter = this->rules->find(original.key);
                 if (iter == this->rules->end()) {
-                    result.push_back(this->materialiser->produce(original.key, original.value));
+                    result.push_back(this->materialiser->produce(original.key, original.ruledata, original, 1));
                 } else {
+                    unsigned int total_siblings = iter->second.size();
                     for (auto keyit = iter->second.begin(); keyit != iter->second.end(); ++keyit) {
-                        TreeNode element = this->materialiser->produce(*keyit, original.value);
+                        TreeNode element = this->materialiser->produce(keyit->key, keyit->ruledata, original, total_siblings);
                         result.push_back(element);
                     }
                 }
@@ -135,8 +169,8 @@ namespace trlsai {
             }
     
         private:
-            shared_ptr<map<KEY, vector<KEY>>> rules;
-            shared_ptr<Materialiser<KEY, VALUE>> materialiser;
+            shared_ptr<Rules> rules;
+            shared_ptr<Materialiser<KEY, RULEDATA, VALUE>> materialiser;
             map<KEY, vector<RegistrationNode>> registrations;
 
             shared_ptr<Iterator<TreeNode>> ltree(shared_ptr<Context<TreeNode>> ctx) {
