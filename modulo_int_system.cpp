@@ -1,12 +1,30 @@
+#include <assert.h>
+#include <iostream>
 #include "modulo_int_system.hpp"
 
 namespace trlsai {
     namespace lsystem {
-        ModuloMaterialiserBase::ModuloMaterialiserBase(int min, int max): min(min), max(max), modulo(1 + max - min) { }
+        ModuloMaterialiserBase::ModuloMaterialiserBase(int min, int max): min(min), max(max), modulo(1 + max - min) {
+            assert(this->min <= this->max);
+        }
 
         int ModuloMaterialiserBase::calculate(const int base, const int interval) {
             int new_val = base + interval;
-            return (new_val - this->min) % this->modulo + this->min;
+            if (new_val < this->min) {
+                return this->max + (1 + new_val - this->min) % this->modulo;
+            } else {
+                return (new_val - this->min) % this->modulo + this->min;
+            }
+        }
+
+        void ModuloMaterialiserBase::set_min(int min) {
+            this->min = min;
+            this->modulo = (1 + this->max - this->min);
+        }
+
+        void ModuloMaterialiserBase::set_max(int max) {
+            this->max = max;
+            this->modulo = (1 + this->max - this->min);
         }
         
         ModuloIntMaterialiser::ModuloIntMaterialiser(int min, int max): ModuloMaterialiserBase(min, max) { }

@@ -133,13 +133,15 @@ void test_rule_updates() {
         ++counter;
         if (counter == 40) {
             int key = 0;
-            vector<RuleNode<int, empty>> new_value({ 0 });
+            vector<RuleNode<int, empty>> new_value;
+            new_value.push_back(0);
             system.update_rule(key, new_value);
         }
 
         if (counter == 50) {
             int key = 1;
-            vector<RuleNode<int, empty>> new_value({ 1 });
+            vector<RuleNode<int, empty>> new_value;
+            new_value.push_back(1);
             system.update_rule(key, new_value);
         }
 
@@ -180,15 +182,19 @@ void test_modulo_with_duration() {
     IntDurationSystem::TreeNode original(1, duration, value);
 
     auto it = system.lazy_expand(original, 20);
-    
-    unsigned long count;
+
+    unsigned long count = 0;
     while (it->has_next()) {
-        if (count == 100) {
+        if (count == 50) {
+            materialiser->set_min(-6);
+            materialiser->set_max(7);
+            system.update_all();
+        } else if (count == 100) {
             vector<RuleNode<int, Duration>> updated;
             system.update_rule(0, updated);
         } else if (count == 150) {
             vector<RuleNode<int, Duration>> updated;
-            for (int j = -5; j <= 5; ++j) {
+            for (int j = -10; j <= 10; ++j) {
                 system.update_rule(j, updated);
             }
         }
@@ -203,11 +209,16 @@ void test_modulo_with_duration() {
     
 }
 
+void test_modulos() {
+  ModuloMaterialiserBase base(-4, 4);
+  base.calculate(0, -5);
+}
+
 int main() {
     test_output();
     test_rule_updates();
     test_modulo_with_duration();
-    //benchmark();
+    test_modulos();
+    benchmark();
     return 0;
 }
-

@@ -6,20 +6,24 @@
 namespace trlsai {
     namespace lsystem {
         class ModuloMaterialiserBase {
-        protected:
+        public:
             ModuloMaterialiserBase(int min, int max);
             
+            void set_min(int min);
+            void set_max(int max);
+            int calculate(const int base, const int interval);
+            
+        private:
             int min;
             int max;
-            unsigned int modulo;
-
-            int calculate(const int base, const int interval);
+            int modulo;
         };
         
         class ModuloIntMaterialiser : public ModuloMaterialiserBase, public Materialiser<int, empty, int> {
         public:
             ModuloIntMaterialiser(int min, int max);
             Triplet<int, empty, int> produce(const int &key, const empty &ruledata, const Triplet<int, empty, int> &parent, unsigned int total_siblings) override;
+            virtual ~ModuloIntMaterialiser() = default;
         };
 
         using duration_value = unsigned long;
@@ -42,6 +46,7 @@ namespace trlsai {
             ModuloDurationMaterialiser(int min, int max);
             Triplet<int, Duration, ModuloValue> produce(const int &key, const Duration &ruledata, const Triplet<int, Duration, ModuloValue> &parent,
                                                               unsigned int total_siblings) override;
+            virtual ~ModuloDurationMaterialiser() = default;
         };
     }
 }

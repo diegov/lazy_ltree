@@ -65,7 +65,7 @@ namespace trlsai {
                                vector<T> &series)
                 : Iterator<T>(series), registry(registry), iter_gen(iter_gen),
                   series_index(0), current_it({ T(), nullptr }), _has_next(false) {
-            };
+            }
 
             bool has_next() override {
                 this->check_next();
