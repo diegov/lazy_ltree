@@ -37,6 +37,8 @@ namespace trlsai {
         };
 
         struct ModuloValue {
+            ModuloValue() = default;
+            ModuloValue(int interval, Duration duration) : interval(interval), duration(duration) { }
             int interval;
             Duration duration;
         };

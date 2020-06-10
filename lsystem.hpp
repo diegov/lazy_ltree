@@ -61,7 +61,7 @@ namespace trlsai {
         class Context {
         public:
             Context(T element): iterations(0), element(element) { }
-            int iterations;
+            unsigned int iterations;
             T element;
 
             shared_ptr<Context<T>> child(T element) {
@@ -93,7 +93,7 @@ namespace trlsai {
                 }
             }
 
-            void update_rule(const KEY &key, vector<RuleNode<KEY, RULEDATA>> &value) {
+            void update_rule(const KEY &key, const vector<RuleNode<KEY, RULEDATA>> &value) {
                 (*this->rules)[key] = value;
 
                 auto registration = this->registrations.find(key);
@@ -106,6 +106,10 @@ namespace trlsai {
                     this->expand(element.first, expanded);
                     element.second->update_series(expanded);
                 }
+            }
+            
+            void update_rule(const KEY &&key, const vector<RuleNode<KEY, RULEDATA>> &&value) {
+                this->update_rule(key, value);
             }
 
             void register_it(TreeNode &key, shared_ptr<Iterator<TreeNode>> it) override {
@@ -146,7 +150,7 @@ namespace trlsai {
                 }
             }
 
-            shared_ptr<Iterator<TreeNode>> lazy_expand(TreeNode &original, int iterations) {
+            shared_ptr<Iterator<TreeNode>> lazy_expand(TreeNode &original, unsigned int iterations) {
                 auto ctx = make_shared<Context<TreeNode>>(original);
                 ctx->iterations = iterations;
 
